@@ -17,6 +17,7 @@ type S3Config struct {
 
 type Config struct {
 	DatabaseURL string
+	KongURL     string
 	JWTKeys     jwk.Set
 	S3          S3Config
 }
@@ -69,6 +70,7 @@ func Init() (*Config, error) {
 		}
 
 		cfg := &Config{
+			KongURL:     v.GetString("KONG_URL"),
 			DatabaseURL: v.GetString("DATABASE_URL"),
 			JWTKeys:     keySet,
 			S3: S3Config{
@@ -92,6 +94,10 @@ func (c *Config) validate() error {
 
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("validation: %s_DATABASE_URL is required", EnvPrefix)
+	}
+
+	if c.KongURL == "" {
+		return fmt.Errorf("validation: %s_KONG_URL is required", EnvPrefix)
 	}
 
 	if c.JWTKeys == nil {

@@ -3,8 +3,8 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/projdocs/api/internal/middleware"
-	"github.com/projdocs/api/internal/routes/public"
-	v1 "github.com/projdocs/api/internal/routes/v1"
+	"github.com/projdocs/api/internal/router/routes/public"
+	"github.com/projdocs/api/internal/router/routes/v1"
 )
 
 func Register(r *gin.RouterGroup) {

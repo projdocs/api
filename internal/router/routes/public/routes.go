@@ -2,7 +2,7 @@ package public
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/projdocs/api/internal/routes/public/auth"
+	"github.com/projdocs/api/internal/router/routes/public/auth"
 	"github.com/projdocs/api/internal/types/response"
 )
 

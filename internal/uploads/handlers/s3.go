@@ -22,7 +22,7 @@ type S3Config struct {
 	Endpoint        string // optional; leave empty for real AWS S3
 }
 
-func newS3TUSHandler(basePath string, cfg S3Config) (*handler.Handler, error) {
+func NewS3TUSHandler(basePath string, cfg S3Config) (*handler.Handler, error) {
 	awsCfg, err := awsconfig.LoadDefaultConfig(
 		context.Background(),
 		awsconfig.WithRegion(cfg.Region),
@@ -46,6 +46,7 @@ func newS3TUSHandler(basePath string, cfg S3Config) (*handler.Handler, error) {
 	})
 
 	store := s3store.New(cfg.Bucket, s3Client)
+	store.ObjectPrefix = "uploads/"
 	composer := handler.NewStoreComposer()
 	store.UseIn(composer)
 

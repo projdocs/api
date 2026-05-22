@@ -3,12 +3,12 @@ package uploads
 import (
 	"sync"
 	"time"
+
+	"github.com/projdocs/projdocs/packages/go/database"
 )
 
-type config = map[string]interface{}
-
 type configCacheEntry struct {
-	cfg       config
+	cfg       *database.PublicStorageProvidersSelect
 	expiresAt time.Time
 }
 
@@ -27,17 +27,17 @@ func newConfigCache(ttl time.Duration) *configCache {
 	return c
 }
 
-func (c *configCache) get(uploadID string) (config, bool) {
+func (c *configCache) get(uploadID string) *database.PublicStorageProvidersSelect {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	e, ok := c.entries[uploadID]
 	if !ok || time.Now().After(e.expiresAt) {
-		return map[string]interface{}{}, false
+		return nil
 	}
-	return e.cfg, true
+	return e.cfg
 }
 
-func (c *configCache) set(uploadID string, cfg config) {
+func (c *configCache) set(uploadID string, cfg *database.PublicStorageProvidersSelect) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries[uploadID] = configCacheEntry{

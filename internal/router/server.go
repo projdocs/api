@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/projdocs/api/config"
 	"github.com/projdocs/api/internal/middleware"
-	"github.com/projdocs/api/internal/routes"
+	"github.com/projdocs/api/internal/router/routes"
 )
 
 func New() *gin.Engine {
@@ -25,6 +25,9 @@ func New() *gin.Engine {
 	}
 
 	router := gin.New()
+	router.RedirectTrailingSlash = false
+	router.RedirectFixedPath = false
+	router.Use(middleware.CORS())
 	router.Use(gin.Logger())
 	router.Use(middleware.Recovery())
 	router.Use(middleware.WrapErrors())
