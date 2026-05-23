@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/projdocs/api/config"
-	"github.com/projdocs/api/internal/middleware"
+	middleware2 "github.com/projdocs/api/internal/router/middleware"
 	"github.com/projdocs/api/internal/router/routes"
 )
 
@@ -27,12 +27,12 @@ func New() *gin.Engine {
 	router := gin.New()
 	router.RedirectTrailingSlash = false
 	router.RedirectFixedPath = false
-	router.Use(middleware.CORS())
+	router.Use(middleware2.CORS())
 	router.Use(gin.Logger())
-	router.Use(middleware.Recovery())
-	router.Use(middleware.WrapErrors())
-	router.NoRoute(middleware.NoRoute())
-	router.NoMethod(middleware.NoMethod())
+	router.Use(middleware2.Recovery())
+	router.Use(middleware2.WrapErrors())
+	router.NoRoute(middleware2.NoRoute())
+	router.NoMethod(middleware2.NoMethod())
 
 	router.SetTrustedProxies(nil)
 

@@ -1,4 +1,4 @@
-package uploads
+package tus
 
 import (
 	"net/http"
