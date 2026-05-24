@@ -12,6 +12,23 @@ type Executable interface {
 }
 
 func SetUser(e Executable, role string, id uuid.UUID) error {
+
+	safeRoles := []string{
+		"admin",
+		"authenticated",
+	}
+
+	// prevent sql injection
+	found := false
+	for _, safeRole := range safeRoles {
+		if role == safeRole {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("role \"%s\" not allowed", role)
+	}
+
 	statements := []string{
 		fmt.Sprintf(`SET LOCAL role = '%s'`, role),
 		fmt.Sprintf(`SELECT set_config('request.jwt.claims', '{"role":"%s"}', true)`, role),

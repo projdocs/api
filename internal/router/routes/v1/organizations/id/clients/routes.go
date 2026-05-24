@@ -81,7 +81,7 @@ func createClient(ctx *gin.Context) {
 	); err != nil {
 		log.Printf("unable to create client: %v", err)
 		if strings.Index(err.Error(), "duplicate key value violates unique constraint") != -1 {
-			response.Error(ctx, http.StatusConflict, fmt.Sprintf("client with name \"%s\" already exists", body.Name))
+			response.Error(ctx, http.StatusConflict, fmt.Sprintf("A client with name \"%s\" already exists", body.Name))
 			return
 		}
 		response.Error(ctx, http.StatusInternalServerError, "failed to create client")
@@ -149,13 +149,6 @@ func createClient(ctx *gin.Context) {
 	); err != nil {
 		log.Printf("unable to create storage provider record: %v", err)
 		response.Error(ctx, http.StatusInternalServerError, "failed to create storage upload record")
-		return
-	}
-
-	// switch to regular user
-	if err := db.SetUser(txn, role.(string), uuid.MustParse(id.(string))); err != nil {
-		log.Printf("unable to set user: %v", err)
-		response.Error(ctx, http.StatusInternalServerError, "unable to set user")
 		return
 	}
 

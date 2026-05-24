@@ -118,7 +118,7 @@ func createOrganization(ctx *gin.Context) {
 	); err != nil {
 		log.Printf("unable to create organization: %v", err)
 		if strings.Index(err.Error(), "duplicate key value violates unique constraint") != -1 {
-			response.Error(ctx, http.StatusConflict, fmt.Sprintf("organization with name \"%s\" already exists", body.Name))
+			response.Error(ctx, http.StatusConflict, fmt.Sprintf("An organization with name \"%s\" already exists", body.Name))
 			return
 		}
 		response.Error(ctx, http.StatusInternalServerError, "failed to create organization")
