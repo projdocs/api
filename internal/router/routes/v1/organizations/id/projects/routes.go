@@ -1,4 +1,4 @@
-package clients
+package projects
 
 import (
 	"github.com/gin-gonic/gin"
@@ -6,5 +6,5 @@ import (
 )
 
 func Register(r *gin.RouterGroup) {
-	r.POST(":id/folders", handlers.CreateFolder)
+	r.POST("/:project-id/folders", handlers.CreateFolder)
 }

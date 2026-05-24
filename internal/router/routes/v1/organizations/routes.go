@@ -4,19 +4,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/projdocs/api/internal/db"
 	"github.com/projdocs/api/internal/handlers"
 	"github.com/projdocs/api/internal/router/middleware"
+	"github.com/projdocs/api/internal/router/routes/v1/organizations/id"
 	"github.com/projdocs/api/internal/storage"
 	"github.com/projdocs/api/internal/types/response"
 	"github.com/projdocs/projdocs/packages/go/database"
 )
 
 func Register(r *gin.RouterGroup) {
-	r.POST(":id/folders", handlers.CreateFolder)
 
 	// admin endpoints
 	admin := r.Group("")
@@ -25,6 +26,9 @@ func Register(r *gin.RouterGroup) {
 		admin.POST("", createOrganization)
 		admin.POST("/", createOrganization)
 	}
+
+	// individual organizations endpoints
+	id.Register(r.Group("/:organization-id"))
 }
 
 func createOrganization(ctx *gin.Context) {
@@ -61,12 +65,16 @@ func createOrganization(ctx *gin.Context) {
 	var s *database.PublicStorageProvidersSelect
 	if body.Storage.Provider.Id == nil {
 		if resolved, ok := handlers.ResolveDefaultStorageProvider(ctx); !ok {
+			//response is handled in the resolver
+			//response.Error(ctx, http.StatusBadRequest, "default storage provider not found")
 			return
 		} else {
 			s = resolved
 		}
 	} else {
 		if resolved, ok := handlers.ResolveStorageProviderFromID(ctx, uuid.MustParse(*body.Storage.Provider.Id)); !ok {
+			//response is handled in the resolver
+			//response.Error(ctx, http.StatusBadRequest, "storage provider not found")
 			return
 		} else {
 			s = resolved
@@ -89,24 +97,30 @@ func createOrganization(ctx *gin.Context) {
 	defer txn.Rollback()
 
 	// create the upload record (provider_id updated after folder is created)
+	orgID := uuid.New()
 	var uploadID uuid.UUID
 	if err = txn.QueryRowContext(ctx,
-		`INSERT INTO public.storage_uploads (provider_id, storage_provider_id) VALUES ('', $1) RETURNING id`,
+		`INSERT INTO public.storage_uploads (provider_id, storage_provider_id, organization_id) VALUES ('', $1, $2) RETURNING id`,
 		s.Id,
+		orgID.String(),
 	).Scan(&uploadID); err != nil {
 		response.Error(ctx, http.StatusInternalServerError, "failed to create storage upload record")
 		return
 	}
 
-	// create the organization
-	var org database.PublicOrganizationsSelect
-	if err = txn.QueryRowContext(ctx,
-		`INSERT INTO public.organizations (display, storage_providers_id, storage_upload_id) VALUES ($1, $2, $3) RETURNING id`,
+	// create organization
+	if _, err = txn.ExecContext(ctx,
+		`INSERT INTO public.organizations (id, display, storage_providers_id, storage_upload_id) VALUES ($1, $2, $3, $4)`,
+		orgID.String(),
 		body.Name,
 		s.Id,
 		uploadID,
-	).Scan(&org.Id); err != nil {
+	); err != nil {
 		log.Printf("unable to create organization: %v", err)
+		if strings.Index(err.Error(), "duplicate key value violates unique constraint") != -1 {
+			response.Error(ctx, http.StatusConflict, fmt.Sprintf("organization with name \"%s\" already exists", body.Name))
+			return
+		}
 		response.Error(ctx, http.StatusInternalServerError, "failed to create organization")
 		return
 	}
@@ -114,12 +128,8 @@ func createOrganization(ctx *gin.Context) {
 	// create the storage folder
 	folderPath, err := sp.CreateFolder(ctx, nil, body.Name, map[string]string{
 		"table": "organizations",
-		"id":    org.Id,
+		"id":    orgID.String(),
 	})
-	if err != nil {
-		response.Error(ctx, http.StatusInternalServerError, "failed to create storage folder")
-		return
-	}
 
 	// update the upload record with the real folder path
 	if _, err = txn.ExecContext(ctx,
@@ -127,6 +137,7 @@ func createOrganization(ctx *gin.Context) {
 		folderPath,
 		uploadID,
 	); err != nil {
+		log.Printf("unable to update storage upload record: %v", err)
 		response.Error(ctx, http.StatusInternalServerError, "failed to save storage folder id")
 		return
 	}
@@ -137,5 +148,5 @@ func createOrganization(ctx *gin.Context) {
 		return
 	}
 
-	response.Data(ctx, http.StatusCreated, gin.H{"id": org.Id})
+	response.Data(ctx, http.StatusCreated, gin.H{"id": orgID.String()})
 }

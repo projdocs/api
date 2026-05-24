@@ -24,7 +24,7 @@ func Handler(c *gin.Context) {
 	base := tusBase(c)
 	uploadID := extractUploadID(c)
 
-	folderID, err := uuid.Parse(c.Param("id"))
+	folderID, err := uuid.Parse(c.Param("folder-id"))
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, fmt.Sprintf("bad id: %v", err))
 		return
