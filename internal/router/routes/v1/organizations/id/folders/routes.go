@@ -8,14 +8,17 @@ import (
 
 func Register(r *gin.RouterGroup) {
 
-	// create folders in this (parent) folder
-	r.POST("/:folder-id", handlers.CreateFolder)
-
-	// add tus multi-part uploads to
-	// create files in this (parent) folder
-	rg := r.Group("/:folder-id/upload")
+	fid := r.Group("/:folder-id")
 	{
-		rg.Any("", tus.Handler)          // POST /v1/folders/:id/upload
-		rg.Any("/*tuspath", tus.Handler) // PATCH/HEAD/DELETE /v1/folders/:id/upload/<id>
+		// create folders in this folder
+		fid.POST("/folders", handlers.CreateFolder)
+
+		// add tus multi-part uploads to
+		// create files in this (parent) folder
+		rg := fid.Group("/upload")
+		{
+			rg.Any("", tus.Handler)          // POST /v1/folders/:id/upload
+			rg.Any("/*tuspath", tus.Handler) // PATCH/HEAD/DELETE /v1/folders/:id/upload/<id>
+		}
 	}
 }

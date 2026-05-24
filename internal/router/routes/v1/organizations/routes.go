@@ -126,7 +126,7 @@ func createOrganization(ctx *gin.Context) {
 	}
 
 	// create the storage folder
-	folderPath, err := sp.CreateFolder(ctx, nil, body.Name, map[string]string{
+	folderPath, err := sp.CreateFolder(ctx, nil, fmt.Sprintf("Organization - %s", body.Name), map[string]string{
 		"table": "organizations",
 		"id":    orgID.String(),
 	})

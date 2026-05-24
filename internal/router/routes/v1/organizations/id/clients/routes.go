@@ -69,16 +69,17 @@ func createClient(ctx *gin.Context) {
 	clientId := uuid.New()
 	storageUploadId := uuid.New()
 	var storageProviderId string
+	var number int64
 
 	// create the client
 	// handles RLS/permissions as current user
-	if _, err = txn.ExecContext(ctx,
-		`INSERT INTO public.clients (id, name, organization_id, storage_upload_id) VALUES ($1, $2, $3, $4)`,
+	if err = txn.QueryRowContext(ctx,
+		`INSERT INTO public.clients (id, name, organization_id, storage_upload_id) VALUES ($1, $2, $3, $4) returning number`,
 		clientId.String(),
 		body.Name,
 		orgID,
 		storageUploadId.String(),
-	); err != nil {
+	).Scan(&number); err != nil {
 		log.Printf("unable to create client: %v", err)
 		if strings.Index(err.Error(), "duplicate key value violates unique constraint") != -1 {
 			response.Error(ctx, http.StatusConflict, fmt.Sprintf("A client with name \"%s\" already exists", body.Name))
@@ -130,7 +131,7 @@ func createClient(ctx *gin.Context) {
 	}
 
 	// create the folder in the storage medium
-	folderPath, err := store.CreateFolder(ctx, &parentFolderPath, body.Name, map[string]string{
+	folderPath, err := store.CreateFolder(ctx, &parentFolderPath, fmt.Sprintf("Client %d - %s", number, body.Name), map[string]string{
 		"table": "clients",
 		"id":    clientId.String(),
 	})

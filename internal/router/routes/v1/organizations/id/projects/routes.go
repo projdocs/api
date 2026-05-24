@@ -69,16 +69,17 @@ func createProject(ctx *gin.Context) {
 	projectID := uuid.New()
 	storageUploadId := uuid.New()
 	var storageProviderId string
+	var number int64
 
 	// create the project
 	// handles RLS/permissions as current user
-	if _, err = txn.ExecContext(ctx,
-		`INSERT INTO public.projects (id, display, organization_id, storage_upload_id) VALUES ($1, $2, $3, $4)`,
+	if err = txn.QueryRowContext(ctx,
+		`INSERT INTO public.projects (id, display, organization_id, storage_upload_id) VALUES ($1, $2, $3, $4) returning number`,
 		projectID.String(),
 		body.Display,
 		orgID,
 		storageUploadId.String(),
-	); err != nil {
+	).Scan(&number); err != nil {
 		log.Printf("unable to create project: %v", err)
 		if strings.Index(err.Error(), "duplicate key value violates unique constraint") != -1 {
 			response.Error(ctx, http.StatusConflict, fmt.Sprintf("A project with name \"%s\" already exists", body.Display))
@@ -130,7 +131,7 @@ func createProject(ctx *gin.Context) {
 	}
 
 	// create the folder in the storage medium
-	folderPath, err := store.CreateFolder(ctx, &parentFolderPath, body.Display, map[string]string{
+	folderPath, err := store.CreateFolder(ctx, &parentFolderPath, fmt.Sprintf("Project %d - %s", number, body.Display), map[string]string{
 		"table": "projects",
 		"id":    projectID.String(),
 	})
