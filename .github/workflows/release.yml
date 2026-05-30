@@ -1,0 +1,85 @@
+name: release.yml
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        type: choice
+        description: "Version bump type"
+        options: [ PATCH, MINOR, MAJOR ]
+        default: PATCH
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+
+  version:
+    uses: rdbc-corp/actions/.github/workflows/get-release-version.yml@main
+    with:
+      bump-type: ${{ github.event.inputs.type }}
+
+  build:
+    runs-on: ubuntu-24.04
+    name: build
+    needs: version
+    strategy:
+      matrix:
+        arch:
+          - amd64
+          - arm64
+        os:
+          - darwin
+          - linux
+          - windows
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: make prod GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} VERSION=${{ needs.version.outputs.next }} MODE=release
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: projdocs-${{ matrix.os }}-${{ matrix.arch }}
+          path: ./dist/
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: [version, build]
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ./dist/
+          merge-multiple: true
+
+      - run: ls ./dist/
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          NOTES=$(git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"%s" | awk '
+            /^feat/     { print "✨ " $0 }
+            /^fix/      { print "🐛 " $0 }
+            /^chore/    { print "🔧 " $0 }
+            /^docs/     { print "📚 " $0 }
+            /^refactor/ { print "♻️  " $0 }
+            /^perf/     { print "⚡ " $0 }
+            /^test/     { print "🧪 " $0 }
+            /^ci/       { print "👷 " $0 }
+          ')
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.version.outputs.next }}
+          files: ./dist/*
+          body: ${{ steps.notes.outputs.notes }}
+          make_latest: true

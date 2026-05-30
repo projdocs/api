@@ -3,27 +3,23 @@ APP     := projdocs-api
 CMD     := ./cmd
 OUT     := ./bin/$(APP)
 MODE    := debug
-
-# ── Build flags ───────────────────────────────────────────────────────────────
-# CGO_ENABLED=0  → pure Go, no libc dependency
-# -trimpath      → strip local file system paths from the binary
-# -ldflags:
-#   -s            strip symbol table
-#   -w            strip DWARF debug info
-#   extldflags    tell the external linker to produce a static binary
-CGO_ENABLED := 0
-LDFLAGS      = -ldflags="-s -w -extldflags '-static' -X 'github.com/projdocs/api/config.Mode=$(MODE)'"
-GCFLAGS     :=
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+GOOS := darwin
+GOARCH := arm64
+EXT := $(if $(filter windows,$(GOOS)),.exe,)
+LDFLAGS      = -ldflags="-s -w -extldflags '-static' -X 'github.com/projdocs/api/config.Mode=$(MODE)' -X 'github.com/projdocs/api/config.Version=$(VERSION)'"
 BUILDFLAGS   = -trimpath $(LDFLAGS)
 
 # ── Targets ───────────────────────────────────────────────────────────────────
 .PHONY: build run clean tidy vet
 
 build: tidy
-	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILDFLAGS) -o $(OUT) $(CMD)
+	CGO_ENABLED=0 go build $(BUILDFLAGS) -o $(OUT) $(CMD)
 
 prod: MODE = release
 prod: build
+	mkdir -p ./dist
+	cp $(BINARY) ./dist/$(APP)-$(VERSION)-$(GOOS)-$(GOARCH)$(EXT)
 
 run: build
 	$(OUT)

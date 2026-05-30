@@ -10,6 +10,8 @@ import (
 
 func main() {
 
+	log.Printf("Version: %s\n", config.Version)
+
 	// init config
 	if _, err := config.Init(); err != nil {
 		log.Fatalf("config error: %s", err)
