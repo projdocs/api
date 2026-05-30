@@ -19,7 +19,7 @@ build: tidy
 prod: MODE = release
 prod: build
 	mkdir -p ./dist
-	cp $(BINARY) ./dist/$(APP)-$(VERSION)-$(GOOS)-$(GOARCH)$(EXT)
+	cp ./bin/$(APP) ./dist/$(APP)-$(VERSION)-$(GOOS)-$(GOARCH)$(EXT)
 
 run: build
 	$(OUT)
