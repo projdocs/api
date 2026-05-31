@@ -151,6 +151,8 @@ func createOrganization(ctx *gin.Context) {
 
 	// attempt to set the default permission
 	go (func() {
+
+		// set default permissions
 		if _, err := db.MustGet().ExecContext(
 			ctx,
 			`WITH old_permission AS (
@@ -176,8 +178,30 @@ func createOrganization(ctx *gin.Context) {
 			orgID.String(),
 			body.DefaultPermission,
 		); err != nil {
-			log.Printf("unable to update organization: %v", err)
+			log.Printf("unable to update organization's members to default role: %v", err)
 		}
+
+		// set administrator permissions
+		if _, err := db.MustGet().ExecContext(
+			ctx, `
+WITH old_permission AS (
+        SELECT default_permissions_id
+        FROM public.organizations
+        WHERE id = $1
+    ),
+    new_permission AS (
+        SELECT p.id
+        FROM public.permissions p
+        WHERE p.organization_id = $1
+          AND p.__is_default_role = true
+          AND p.organization = 'DELETE'
+    )
+update public.members SET permissions_id = (SELECT id FROM new_permission) where user_id = (select u.id from auth.users u where u.role = 'admin') and permissions_id = (SELECT default_permissions_id FROM old_permission)`,
+			orgID.String(),
+		); err != nil {
+			log.Printf("unable to update organization's administrators to admin role: %v", err)
+		}
+
 	})()
 
 	response.Data(ctx, http.StatusCreated, gin.H{"id": orgID.String()})
