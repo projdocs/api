@@ -25,7 +25,7 @@ func Register(r *gin.RouterGroup) {
 		}
 		defer rows.Close()
 
-		var providers []Provider
+		var providers []Provider = make([]Provider, 0)
 		for rows.Next() {
 			var p Provider
 			if err := rows.Scan(&p.Id, &p.Identifier, &p.Name); err != nil {
