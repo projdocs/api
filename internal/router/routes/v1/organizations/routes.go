@@ -35,8 +35,9 @@ func createOrganization(ctx *gin.Context) {
 
 	// parse request
 	var body struct {
-		Name    string `json:"name" binding:"required"`
-		Storage struct {
+		Name              string `json:"name" binding:"required"`
+		DefaultPermission string `json:"default_permission" binding:"required"`
+		Storage           struct {
 			Provider struct {
 				Id *string `json:"id"` // optional—no binding:"required"
 			} `json:"provider"`
@@ -55,7 +56,7 @@ func createOrganization(ctx *gin.Context) {
 	}
 
 	// get id
-	id, ok := ctx.Get(middleware.AuthenticationJWTIDGinContextKey)
+	uid, ok := ctx.Get(middleware.AuthenticationJWTIDGinContextKey)
 	if !ok {
 		response.Error(ctx, http.StatusForbidden, "invalid id")
 		return
@@ -89,7 +90,7 @@ func createOrganization(ctx *gin.Context) {
 	}
 
 	// start transaction
-	txn, err := db.WithRLS(ctx, db.MustGet(), role.(string), uuid.MustParse(id.(string)))
+	txn, err := db.WithRLS(ctx, db.MustGet(), role.(string), uuid.MustParse(uid.(string)))
 	if err != nil {
 		response.Error(ctx, http.StatusInternalServerError, "unable to start database transaction")
 		return
@@ -147,6 +148,37 @@ func createOrganization(ctx *gin.Context) {
 		response.Error(ctx, http.StatusInternalServerError, "failed to commit changes")
 		return
 	}
+
+	// attempt to set the default permission
+	go (func() {
+		if _, err := db.MustGet().ExecContext(
+			ctx,
+			`WITH old_permission AS (
+        SELECT default_permissions_id
+        FROM public.organizations
+        WHERE id = $1
+    ),
+    new_permission AS (
+        SELECT p.id
+        FROM public.permissions p
+        WHERE p.organization_id = $1
+          AND p.__is_default_role = true
+          AND p.organization = $2
+    ),
+    update_org AS (
+        UPDATE public.organizations
+        SET default_permissions_id = (SELECT id FROM new_permission)
+        WHERE id = $1
+    )
+    UPDATE public.members
+    SET permissions_id = (SELECT id FROM new_permission)
+    WHERE permissions_id = (SELECT default_permissions_id FROM old_permission)`,
+			orgID.String(),
+			body.DefaultPermission,
+		); err != nil {
+			log.Printf("unable to update organization: %v", err)
+		}
+	})()
 
 	response.Data(ctx, http.StatusCreated, gin.H{"id": orgID.String()})
 }
