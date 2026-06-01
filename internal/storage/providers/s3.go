@@ -167,7 +167,7 @@ func (p *S3Provider) ToTusHandler(storageProviderID uuid.UUID, basePath string, 
 			return handler.HTTPResponse{
 				StatusCode: http.StatusNoContent,
 				Header: handler.HTTPHeader{
-					"Location": fileID.String(),
+					"Location": fmt.Sprintf("%s:%s", fileID.String(), versionID.String()),
 				},
 			}, nil
 		},
