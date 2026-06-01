@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/projdocs/api/internal/db"
 	"github.com/projdocs/api/internal/handlers"
 	"github.com/projdocs/api/internal/router/middleware"
 	"github.com/projdocs/api/internal/storage"
@@ -24,12 +25,14 @@ func Handler(c *gin.Context) {
 	base := tusBase(c)
 	uploadID := extractUploadID(c)
 
+	// get the folder
 	folderID, err := uuid.Parse(c.Param("folder-id"))
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, fmt.Sprintf("bad id: %v", err))
 		return
 	}
 
+	// handle auth
 	auth, authd := c.Get(middleware.AuthenticationJWTGinContextKey)
 	if !authd {
 		response.Error(c, http.StatusForbidden, "authentication missing")
@@ -40,7 +43,6 @@ func Handler(c *gin.Context) {
 		response.Error(c, http.StatusForbidden, "invalid authentication token")
 		return
 	}
-
 	if _, err := uuid.Parse(token.Subject()); err != nil {
 		response.Error(c, http.StatusBadRequest, "invalid subject")
 		return
@@ -69,8 +71,19 @@ func Handler(c *gin.Context) {
 		return
 	}
 
+	// get parent path
+	// get the storage object
+	var providerID string
+	if err := db.MustGet().QueryRow(
+		`select u.provider_id from public.storage_uploads u where u.id = (select f.storage_upload_id from public.folders f where f.id = $1)`,
+		folderID,
+	).Scan(&providerID); err != nil {
+		response.Error(c, http.StatusInternalServerError, "unable to resolve parent-folder storage id")
+		return
+	}
+
 	// get TUS handler
-	tusHandler, err := s.ToTusHandler(base, "uploads/")
+	tusHandler, err := s.ToTusHandler(uuid.MustParse(sp.Id), base, providerID)
 	if err != nil {
 		log.Printf("error creating tus handler: %v", err)
 		response.Error(c, http.StatusInternalServerError, "error creating upload handler")
@@ -86,17 +99,13 @@ func Handler(c *gin.Context) {
 	}()
 
 	stripped := http.StripPrefix(strings.TrimSuffix(base, "/"), tusHandler)
+	rw := &responseInterceptor{ResponseWriter: c.Writer}
+	stripped.ServeHTTP(rw, c.Request)
 
-	if c.Request.Method == http.MethodPost {
-		rw := &responseInterceptor{ResponseWriter: c.Writer}
-		stripped.ServeHTTP(rw, c.Request)
-		if rw.uploadID != "" {
-			cache.set(rw.uploadID, sp)
-		}
-		c.Abort()
-		return
+	// cache on the initial create event
+	if c.Request.Method == http.MethodPost && rw.uploadID != "" {
+		cache.set(rw.uploadID, sp)
 	}
 
-	stripped.ServeHTTP(c.Writer, c.Request)
 	c.Abort()
 }

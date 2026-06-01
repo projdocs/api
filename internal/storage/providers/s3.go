@@ -3,14 +3,19 @@ package providers
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/google/uuid"
+	"github.com/projdocs/api/internal/db"
 	"github.com/tus/tusd/v2/pkg/handler"
 	"github.com/tus/tusd/v2/pkg/s3store"
 )
@@ -31,10 +36,10 @@ type S3Provider struct {
 	bucket string
 }
 
-func (p *S3Provider) ToTusHandler(basePath string, uploadPrefix string) (*handler.Handler, error) {
+func (p *S3Provider) ToTusHandler(storageProviderID uuid.UUID, basePath string, uploadPrefix string) (*handler.Handler, error) {
 
 	store := s3store.New(p.bucket, p.client)
-	store.ObjectPrefix = uploadPrefix
+	store.ObjectPrefix = fmt.Sprintf("%s/", strings.TrimPrefix(strings.TrimSuffix(uploadPrefix, "/"), "/"))
 	composer := handler.NewStoreComposer()
 	store.UseIn(composer)
 
@@ -43,8 +48,130 @@ func (p *S3Provider) ToTusHandler(basePath string, uploadPrefix string) (*handle
 		StoreComposer:           composer,
 		RespectForwardedHeaders: true,
 		NotifyCompleteUploads:   true,
-	})
+		PreFinishResponseCallback: func(hook handler.HookEvent) (handler.HTTPResponse, error) {
 
+			folderID := strings.Split(hook.HTTPRequest.URI, "/")[5]
+			providerID := fmt.Sprintf("%s/%s", strings.TrimPrefix(strings.TrimSuffix(uploadPrefix, "/"), "/"), strings.Split(hook.Upload.ID, "+")[0])
+
+			// get db connection
+			var pg *sql.DB
+			if _pg, err := db.Get(); err != nil {
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"unable to connect to database","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			} else {
+				pg = _pg
+			}
+
+			// create transaction
+			var txn *sql.Tx
+			if _txn, err := pg.BeginTx(context.Background(), nil); err != nil {
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"unable to begin database transaction","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			} else {
+				txn = _txn
+			}
+			defer txn.Rollback()
+
+			// hold uploadID
+			uploadID := uuid.New()
+
+			// create the file
+			fileID := uuid.New()
+			if _, err := txn.Exec(
+				`insert into public.files (id, folder_id) values ($1, $2)`,
+				fileID.String(),
+				folderID,
+			); err != nil {
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"failed to create file","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			}
+
+			// create the version
+			versionID := uuid.New()
+			if _, err := txn.Exec(
+				`insert into public.files_versions (id, files_id, storage_uploads_id) values ($1, $2, $3)`,
+				versionID.String(),
+				fileID.String(),
+				uploadID.String(),
+			); err != nil {
+				log.Printf("failed to insert version: %v\n", err)
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"failed to create file-version","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			}
+
+			head, err := p.client.HeadObject(context.Background(), &s3.HeadObjectInput{
+				Bucket: aws.String(p.bucket),
+				Key:    aws.String(providerID),
+			})
+			if err != nil {
+				return handler.HTTPResponse{
+					StatusCode: http.StatusInternalServerError,
+					Body:       `{"error":"failed to retrieve object metadata","data":null}`,
+					Header:     handler.HTTPHeader{"Content-Type": "application/json"},
+				}, nil
+			}
+
+			checksum := strings.Trim(aws.ToString(head.ETag), `"`)
+
+			// create the storage_uploads record
+			if _, err := txn.Exec(
+				`INSERT INTO public.storage_uploads (id, storage_provider_id, file_version_id, provider_id, checksum) VALUES ($1, $2, $3, $4, $5)`,
+				uploadID.String(),
+				storageProviderID.String(),
+				versionID.String(),
+				providerID,
+				checksum,
+			); err != nil {
+				log.Printf("failed to insert storage_upload: %v\n", err)
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"failed to create storage-upload record","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			}
+
+			// commit
+			if err := txn.Commit(); err != nil {
+				log.Printf("failed to commit transaction: %v\n", err)
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"failed to commit changes","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			}
+
+			return handler.HTTPResponse{
+				StatusCode: http.StatusNoContent,
+				Header: handler.HTTPHeader{
+					"Location": fileID.String(),
+				},
+			}, nil
+		},
+	})
 }
 
 func NewS3Provider(cfg S3Config) (*S3Provider, error) {

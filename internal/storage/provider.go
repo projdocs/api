@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/projdocs/api/config"
 	"github.com/projdocs/api/internal/storage/providers"
 	"github.com/projdocs/projdocs/packages/go/database"
@@ -14,7 +15,7 @@ import (
 
 type Provider interface {
 	CreateFolder(ctx context.Context, parentID *string, name string, metadata map[string]string) (*string, error)
-	ToTusHandler(basePath string, uploadPrefix string) (*handler.Handler, error)
+	ToTusHandler(storageProviderID uuid.UUID, basePath string, parent string) (*handler.Handler, error)
 }
 
 func GetProviderFrom(p *database.PublicStorageProvidersSelect) (Provider, error) {
