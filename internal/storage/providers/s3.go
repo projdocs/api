@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/projdocs/api/internal/db"
+	"github.com/projdocs/api/internal/router/middleware"
 	"github.com/tus/tusd/v2/pkg/handler"
 	"github.com/tus/tusd/v2/pkg/s3store"
 )
@@ -82,15 +83,30 @@ func (p *S3Provider) ToTusHandler(storageProviderID uuid.UUID, basePath string, 
 			}
 			defer txn.Rollback()
 
+			if err := db.SetUser(txn, hook.Context.Value(middleware.AuthenticationJWTRoleGinContextKey).(string), uuid.MustParse(hook.Context.Value(middleware.AuthenticationJWTIDGinContextKey).(string))); err != nil {
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"failed to handle authentication","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			}
+
 			// hold uploadID
 			uploadID := uuid.New()
 
 			// create the file
 			fileID := uuid.New()
+			fileName := "new-file"
+			if _fileName, ok := hook.Upload.MetaData["filename"]; ok && _fileName != "" {
+				fileName = _fileName
+			}
 			if _, err := txn.Exec(
-				`insert into public.files (id, folder_id) values ($1, $2)`,
+				`insert into public.files (id, folder_id, name) values ($1, $2, $3)`,
 				fileID.String(),
 				folderID,
+				fileName,
 			); err != nil {
 				return handler.HTTPResponse{
 					StatusCode: http.StatusBadRequest,
@@ -132,6 +148,16 @@ func (p *S3Provider) ToTusHandler(storageProviderID uuid.UUID, basePath string, 
 			}
 
 			checksum := strings.Trim(aws.ToString(head.ETag), `"`)
+
+			if err := db.SetUser(txn, "admin", uuid.Nil); err != nil {
+				return handler.HTTPResponse{
+					StatusCode: http.StatusBadRequest,
+					Body:       `{"error":"failed to handle authentication (switch-user error)","data":null}`,
+					Header: handler.HTTPHeader{
+						"Content-Type": "application/json",
+					},
+				}, nil
+			}
 
 			// create the storage_uploads record
 			if _, err := txn.Exec(

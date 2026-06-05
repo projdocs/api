@@ -1,6 +1,7 @@
 package tus
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -98,9 +99,12 @@ func Handler(c *gin.Context) {
 		}
 	}()
 
+	ctx := context.WithValue(c.Request.Context(), middleware.AuthenticationJWTIDGinContextKey, c.MustGet(middleware.AuthenticationJWTIDGinContextKey))
+	ctx = context.WithValue(ctx, middleware.AuthenticationJWTGinContextKey, c.MustGet(middleware.AuthenticationJWTGinContextKey))
+	ctx = context.WithValue(ctx, middleware.AuthenticationJWTRoleGinContextKey, c.MustGet(middleware.AuthenticationJWTRoleGinContextKey))
 	stripped := http.StripPrefix(strings.TrimSuffix(base, "/"), tusHandler)
 	rw := &responseInterceptor{ResponseWriter: c.Writer}
-	stripped.ServeHTTP(rw, c.Request)
+	stripped.ServeHTTP(rw, c.Request.WithContext(ctx))
 
 	// cache on the initial create event
 	if c.Request.Method == http.MethodPost && rw.uploadID != "" {
