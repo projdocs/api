@@ -13,6 +13,7 @@ import (
 	"github.com/projdocs/api/internal/db"
 	"github.com/projdocs/api/internal/handlers/tus"
 	"github.com/projdocs/api/internal/router/middleware"
+	"github.com/projdocs/api/internal/router/routes/v1/organizations/id/folders/files/versions"
 	"github.com/projdocs/api/internal/storage"
 	"github.com/tus/tusd/v2/pkg/handler"
 )
@@ -23,6 +24,9 @@ func Register(r *gin.RouterGroup) {
 	// create a new version
 	fid.Any("/upload", tus.MakeGinHandler(onUploadCallback))
 	fid.Any("/upload/*tuspath", tus.MakeGinHandler(onUploadCallback))
+
+	// manage existing versions
+	versions.Register(fid.Group("/versions"))
 }
 
 var onUploadCallback storage.Callback = func(

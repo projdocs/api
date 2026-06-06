@@ -22,12 +22,20 @@ type Callback = func(
 
 type Provider interface {
 	CreateFolder(ctx context.Context, parentID *string, name string, metadata map[string]string) (*string, error)
+
 	ToTusHandler(
 		storageProviderID uuid.UUID,
 		basePath string,
 		parent string,
 		callback Callback,
 	) (*handler.Handler, error)
+
+	GetContent(
+		ctx context.Context,
+		id string,
+		start int64,
+		end int64,
+	) ([]byte, error)
 }
 
 func GetProviderFrom(p *database.PublicStorageProvidersSelect) (Provider, error) {

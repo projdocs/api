@@ -25,6 +25,9 @@ func CORS() gin.HandlerFunc {
 			"Content-Length",
 			"Authorization",
 			"X-Requested-With",
+			"If-Range",
+			"Range",
+			"Content-ID",
 			// TUS protocol headers
 			"Tus-Resumable",
 			"Upload-Length",
@@ -43,6 +46,8 @@ func CORS() gin.HandlerFunc {
 			"Upload-Offset",
 			"Upload-Length",
 			"Upload-Expires",
+			"Content-ID",
+			"ETag",
 		},
 		AllowCredentials: false, // must be false when AllowOrigins is "*"
 		MaxAge:           12 * time.Hour,

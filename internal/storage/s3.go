@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -162,4 +163,24 @@ func (p *S3Provider) CreateFolder(ctx context.Context, parent *string, name stri
 	}
 
 	return &key, nil
+}
+
+func (p *S3Provider) GetContent(
+	ctx context.Context,
+	id string,
+	start int64,
+	end int64,
+) ([]byte, error) {
+
+	result, err := p.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(p.bucket),
+		Key:    aws.String(id),
+		Range:  aws.String(fmt.Sprintf("bytes=%d-%d", start, end)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("s3 get object: %w", err)
+	}
+	defer result.Body.Close()
+
+	return io.ReadAll(result.Body)
 }

@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	github.com/projdocs/projdocs/packages/go v0.0.0-20260521033434-c7a6d1c07743
+	github.com/projdocs/projdocs/packages/go v0.0.0-20260606155659-efca69d5e60d
 	github.com/spf13/viper v1.21.0
 	github.com/tus/tusd/v2 v2.9.2
 )
