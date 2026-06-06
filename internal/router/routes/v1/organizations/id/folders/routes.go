@@ -130,11 +130,12 @@ var onUploadCallback storage.Callback = func(
 	// create the version
 	versionID := uuid.New()
 	if _, err := txn.Exec(
-		`insert into public.files_versions (id, files_id, storage_uploads_id, mime_type) values ($1, $2, $3, $4)`,
+		`insert into public.files_versions (id, files_id, storage_uploads_id, mime_type, size) values ($1, $2, $3, $4, $5)`,
 		versionID.String(),
 		fileID.String(),
 		uploadID.String(),
 		mimeType,
+		hook.Upload.Size,
 	); err != nil {
 		log.Printf("failed to insert version: %v\n", err)
 		return handler.HTTPResponse{
