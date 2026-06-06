@@ -1,4 +1,4 @@
-package folders
+package files
 
 import (
 	"context"
@@ -11,28 +11,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/projdocs/api/internal/db"
-	"github.com/projdocs/api/internal/handlers"
 	"github.com/projdocs/api/internal/handlers/tus"
 	"github.com/projdocs/api/internal/router/middleware"
-	"github.com/projdocs/api/internal/router/routes/v1/organizations/id/folders/files"
 	"github.com/projdocs/api/internal/storage"
 	"github.com/tus/tusd/v2/pkg/handler"
 )
 
 func Register(r *gin.RouterGroup) {
-	fid := r.Group("/:folder-id")
+	fid := r.Group("/:file-id")
 
-	{
-		// create folders in this folder
-		fid.POST("/folders", handlers.CreateFolder)
-
-		// create new files in this folder
-		fid.Any("/upload", tus.MakeGinHandler(onUploadCallback))
-		fid.Any("/upload/*tuspath", tus.MakeGinHandler(onUploadCallback))
-
-		// manage existing files
-		files.Register(fid.Group("/files"))
-	}
+	// create a new version
+	fid.Any("/upload", tus.MakeGinHandler(onUploadCallback))
+	fid.Any("/upload/*tuspath", tus.MakeGinHandler(onUploadCallback))
 }
 
 var onUploadCallback storage.Callback = func(
@@ -42,7 +32,9 @@ var onUploadCallback storage.Callback = func(
 	checksum string,
 	hook handler.HookEvent,
 ) handler.HTTPResponse {
-	folderID := strings.Split(hook.HTTPRequest.URI, "/")[5]
+
+	fileID := strings.Split(hook.HTTPRequest.URI, "/")[7]
+	log.Printf("FILE ID: %s\n", fileID)
 
 	// get db connection
 	var pg *sql.DB
@@ -86,33 +78,12 @@ var onUploadCallback storage.Callback = func(
 	// hold uploadID
 	uploadID := uuid.New()
 
-	// create the file
-	fileID := uuid.New()
-	fileName := "new-file"
-	if _fileName, ok := hook.Upload.MetaData["filename"]; ok && _fileName != "" {
-		fileName = _fileName
-	}
-	if _, err := txn.Exec(
-		`insert into public.files (id, folder_id, name) values ($1, $2, $3)`,
-		fileID.String(),
-		folderID,
-		fileName,
-	); err != nil {
-		return handler.HTTPResponse{
-			StatusCode: http.StatusBadRequest,
-			Body:       `{"error":"failed to create file","data":null}`,
-			Header: handler.HTTPHeader{
-				"Content-Type": "application/json",
-			},
-		}
-	}
-
 	// create the version
 	versionID := uuid.New()
 	if _, err := txn.Exec(
 		`insert into public.files_versions (id, files_id, storage_uploads_id) values ($1, $2, $3)`,
 		versionID.String(),
-		fileID.String(),
+		fileID,
 		uploadID.String(),
 	); err != nil {
 		log.Printf("failed to insert version: %v\n", err)
@@ -125,6 +96,7 @@ var onUploadCallback storage.Callback = func(
 		}
 	}
 
+	// switch to admin user
 	if err := db.SetUser(txn, "admin", uuid.Nil); err != nil {
 		return handler.HTTPResponse{
 			StatusCode: http.StatusBadRequest,
@@ -169,7 +141,7 @@ var onUploadCallback storage.Callback = func(
 	return handler.HTTPResponse{
 		StatusCode: http.StatusNoContent,
 		Header: handler.HTTPHeader{
-			"Location": fmt.Sprintf("%s:%s", fileID.String(), versionID.String()),
+			"Location": fmt.Sprintf("%s:%s", fileID, versionID.String()),
 		},
 	}
 }

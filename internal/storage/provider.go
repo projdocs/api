@@ -8,14 +8,26 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/projdocs/api/config"
-	"github.com/projdocs/api/internal/storage/providers"
 	"github.com/projdocs/projdocs/packages/go/database"
 	"github.com/tus/tusd/v2/pkg/handler"
 )
 
+type Callback = func(
+	storageProviderID uuid.UUID,
+	basePath string,
+	parent string,
+	checksum string,
+	hook handler.HookEvent,
+) handler.HTTPResponse
+
 type Provider interface {
 	CreateFolder(ctx context.Context, parentID *string, name string, metadata map[string]string) (*string, error)
-	ToTusHandler(storageProviderID uuid.UUID, basePath string, parent string) (*handler.Handler, error)
+	ToTusHandler(
+		storageProviderID uuid.UUID,
+		basePath string,
+		parent string,
+		callback Callback,
+	) (*handler.Handler, error)
 }
 
 func GetProviderFrom(p *database.PublicStorageProvidersSelect) (Provider, error) {
@@ -25,7 +37,7 @@ func GetProviderFrom(p *database.PublicStorageProvidersSelect) (Provider, error)
 
 	switch p.Type {
 	case "BUILT_IN":
-		return providers.NewS3Provider(providers.S3Config{
+		return NewS3Provider(S3Config{
 			Region:          "local",
 			Bucket:          "projdocs",
 			AccessKeyID:     config.MustGet().S3.AccessKey,
@@ -45,7 +57,7 @@ func GetProviderFrom(p *database.PublicStorageProvidersSelect) (Provider, error)
 			return nil, fmt.Errorf("unmarshal storage provider data: %w", err)
 		}
 
-		return providers.NewS3Provider(providers.S3Config{
+		return NewS3Provider(S3Config{
 			Region:          data.Region,
 			Bucket:          data.Bucket,
 			AccessKeyID:     data.AccessKeyID,
