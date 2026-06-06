@@ -90,16 +90,22 @@ var onUploadCallback storage.Callback = func(
 		}
 	}
 
+	mimeType := "application/octet-stream"
+	if filetype, ok := hook.Upload.MetaData["filetype"]; ok && filetype != "" {
+		mimeType = filetype
+	}
+
 	// hold uploadID
 	uploadID := uuid.New()
 
 	// create the version
 	versionID := uuid.New()
 	if _, err := txn.Exec(
-		`insert into public.files_versions (id, files_id, storage_uploads_id) values ($1, $2, $3)`,
+		`insert into public.files_versions (id, files_id, storage_uploads_id, mime_type) values ($1, $2, $3, $4)`,
 		versionID.String(),
 		fileID,
 		uploadID.String(),
+		mimeType,
 	); err != nil {
 		log.Printf("failed to insert version: %v\n", err)
 		return handler.HTTPResponse{
