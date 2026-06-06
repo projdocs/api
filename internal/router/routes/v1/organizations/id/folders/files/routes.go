@@ -33,8 +33,8 @@ var onUploadCallback storage.Callback = func(
 	hook handler.HookEvent,
 ) handler.HTTPResponse {
 
+	folderID := strings.Split(hook.HTTPRequest.URI, "/")[5]
 	fileID := strings.Split(hook.HTTPRequest.URI, "/")[7]
-	log.Printf("FILE ID: %s\n", fileID)
 
 	// get db connection
 	var pg *sql.DB
@@ -69,6 +69,21 @@ var onUploadCallback storage.Callback = func(
 		return handler.HTTPResponse{
 			StatusCode: http.StatusBadRequest,
 			Body:       `{"error":"failed to handle authentication","data":null}`,
+			Header: handler.HTTPHeader{
+				"Content-Type": "application/json",
+			},
+		}
+	}
+
+	// get the provider ID
+	var providerID string
+	if err := db.MustGet().QueryRow(
+		`select u.provider_id from public.storage_uploads u where u.id = (select f.storage_upload_id from public.folders f where f.id = $1)`,
+		folderID,
+	).Scan(&providerID); err != nil {
+		return handler.HTTPResponse{
+			StatusCode: http.StatusBadRequest,
+			Body:       `{"error":"unable to resolve parent-folder storage ID","data":null}`,
 			Header: handler.HTTPHeader{
 				"Content-Type": "application/json",
 			},
@@ -113,7 +128,7 @@ var onUploadCallback storage.Callback = func(
 		uploadID.String(),
 		storageProviderID.String(),
 		versionID.String(),
-		storageProviderID.String(),
+		fmt.Sprintf("%s/%s", strings.TrimSuffix(providerID, "/"), strings.Split(hook.Upload.ID, "+")[0]),
 		checksum,
 	); err != nil {
 		log.Printf("failed to insert storage_upload: %v\n", err)

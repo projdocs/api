@@ -83,6 +83,21 @@ var onUploadCallback storage.Callback = func(
 		}
 	}
 
+	// get the provider ID
+	var providerID string
+	if err := db.MustGet().QueryRow(
+		`select u.provider_id from public.storage_uploads u where u.id = (select f.storage_upload_id from public.folders f where f.id = $1)`,
+		folderID,
+	).Scan(&providerID); err != nil {
+		return handler.HTTPResponse{
+			StatusCode: http.StatusBadRequest,
+			Body:       `{"error":"unable to resolve parent-folder storage ID","data":null}`,
+			Header: handler.HTTPHeader{
+				"Content-Type": "application/json",
+			},
+		}
+	}
+
 	// hold uploadID
 	uploadID := uuid.New()
 
@@ -141,7 +156,7 @@ var onUploadCallback storage.Callback = func(
 		uploadID.String(),
 		storageProviderID.String(),
 		versionID.String(),
-		storageProviderID.String(),
+		fmt.Sprintf("%s/%s", strings.TrimSuffix(providerID, "/"), strings.Split(hook.Upload.ID, "+")[0]),
 		checksum,
 	); err != nil {
 		log.Printf("failed to insert storage_upload: %v\n", err)
