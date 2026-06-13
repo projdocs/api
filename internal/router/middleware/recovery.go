@@ -1,8 +1,9 @@
 package middleware
 
 import (
-	"fmt"
+	"log"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
 	"github.com/projdocs/api/internal/types/response"
@@ -15,10 +16,9 @@ func Recovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				msg := fmt.Sprintf("internal server error: %v", rec)
-				// In production you'd strip the internal detail from `msg`
-				// and log it instead of sending it to the client.
-				response.AbortWith(c, http.StatusInternalServerError, msg)
+				stack := debug.Stack()
+				log.Printf("panic: %v\n%s", rec, stack)
+				response.AbortWith(c, http.StatusInternalServerError, "internal server error")
 			}
 		}()
 		c.Next()

@@ -1,4 +1,4 @@
-package storage
+package providers
 
 import (
 	"context"
@@ -8,17 +8,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/projdocs/api/config"
+	"github.com/projdocs/api/internal/storage/providers/gdrive"
+	"github.com/projdocs/api/internal/storage/providers/s3"
+	"github.com/projdocs/api/internal/storage/types"
 	"github.com/projdocs/projdocs/packages/go/database"
 	"github.com/tus/tusd/v2/pkg/handler"
 )
-
-type Callback = func(
-	storageProviderID uuid.UUID,
-	basePath string,
-	parent string,
-	checksum string,
-	hook handler.HookEvent,
-) handler.HTTPResponse
 
 type Provider interface {
 	CreateFolder(ctx context.Context, parentID *string, name string, metadata map[string]string) (*string, error)
@@ -27,7 +22,7 @@ type Provider interface {
 		storageProviderID uuid.UUID,
 		basePath string,
 		parent string,
-		callback Callback,
+		callback types.Callback,
 	) (*handler.Handler, error)
 
 	GetContent(
@@ -38,14 +33,20 @@ type Provider interface {
 	) ([]byte, error)
 }
 
-func GetProviderFrom(p *database.PublicStorageProvidersSelect) (Provider, error) {
+func GetProvider(p *database.PublicStorageProvidersSelect) (Provider, error) {
 	if !p.IsValid {
 		return nil, fmt.Errorf("provider is not valid")
 	}
 
 	switch p.Type {
+	case "GOOGLE_DRIVE":
+		var cfg gdrive.Config
+		if err := json.Unmarshal(p.Data.([]byte), &cfg); err != nil {
+			return nil, fmt.Errorf("unmarshal storage provider data: %w", err)
+		}
+		return gdrive.NewProvider(&cfg)
 	case "BUILT_IN":
-		return NewS3Provider(S3Config{
+		return s3.NewProvider(s3.Config{
 			Region:          "local",
 			Bucket:          "projdocs",
 			AccessKeyID:     config.MustGet().S3.AccessKey,
@@ -65,7 +66,7 @@ func GetProviderFrom(p *database.PublicStorageProvidersSelect) (Provider, error)
 			return nil, fmt.Errorf("unmarshal storage provider data: %w", err)
 		}
 
-		return NewS3Provider(S3Config{
+		return s3.NewProvider(s3.Config{
 			Region:          data.Region,
 			Bucket:          data.Bucket,
 			AccessKeyID:     data.AccessKeyID,

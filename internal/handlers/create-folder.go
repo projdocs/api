@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/projdocs/api/internal/db"
 	"github.com/projdocs/api/internal/router/middleware"
-	"github.com/projdocs/api/internal/storage"
+	"github.com/projdocs/api/internal/storage/providers"
 	"github.com/projdocs/api/internal/types/response"
 )
 
@@ -135,14 +135,14 @@ func CreateFolder(ctx *gin.Context) {
 	}
 
 	// handle storage provider
-	var store storage.Provider
+	var store providers.Provider
 	if resolved, ok := ResolveStorageProviderFromOrganization(ctx, uuid.MustParse(orgID)); !ok {
 		//response is handled in the resolver
 		//response.Error(ctx, http.StatusBadRequest, "storage provider not found")
 		return
 	} else {
 		storageProviderId = resolved.Id
-		storageProvider, err := storage.GetProviderFrom(resolved)
+		storageProvider, err := providers.GetProvider(resolved)
 		if err != nil {
 			log.Printf("unable to get provider from storage: %v", err)
 			response.Error(ctx, http.StatusInternalServerError, "unable to create storage provider")

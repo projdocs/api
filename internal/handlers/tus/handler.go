@@ -13,14 +13,15 @@ import (
 	"github.com/projdocs/api/internal/db"
 	"github.com/projdocs/api/internal/handlers"
 	"github.com/projdocs/api/internal/router/middleware"
-	"github.com/projdocs/api/internal/storage"
+	"github.com/projdocs/api/internal/storage/providers"
+	"github.com/projdocs/api/internal/storage/types"
 	"github.com/projdocs/api/internal/types/response"
 	"github.com/projdocs/projdocs/packages/go/database"
 )
 
 var cache = newConfigCache(1 * time.Hour)
 
-func MakeGinHandler(cb storage.Callback) func(*gin.Context) {
+func MakeGinHandler(cb types.Callback) func(*gin.Context) {
 
 	return func(c *gin.Context) {
 		base := tusBase(c)
@@ -50,7 +51,7 @@ func MakeGinHandler(cb storage.Callback) func(*gin.Context) {
 		}
 
 		// instantiate StorageProvider
-		s, err := storage.GetProviderFrom(sp)
+		s, err := providers.GetProvider(sp)
 		if err != nil {
 			log.Printf("error creating tus handler: %v", err)
 			response.Error(c, http.StatusInternalServerError, "error creating upload handler")

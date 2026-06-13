@@ -2,11 +2,12 @@ package versions
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/projdocs/api/internal/storage"
+	"github.com/projdocs/api/internal/storage/providers"
 	"github.com/projdocs/api/internal/types/response"
 	"github.com/projdocs/projdocs/packages/go/database"
 )
@@ -45,7 +46,7 @@ var get = func(c *gin.Context) {
 	}
 
 	// instantiate a provider
-	store, err := storage.GetProviderFrom(sp)
+	store, err := providers.GetProvider(sp)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "unable to construct storage provider")
 		return
@@ -54,6 +55,7 @@ var get = func(c *gin.Context) {
 	// get the bytes
 	bytes, err := store.GetContent(c, su.ProviderId, rangeStart, rangeEnd)
 	if err != nil {
+		log.Printf("unable to get content from storage: %v\n", err)
 		response.Error(c, http.StatusInternalServerError, "unable to get content")
 		return
 	}

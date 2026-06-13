@@ -12,7 +12,7 @@ import (
 	"github.com/projdocs/api/internal/handlers"
 	"github.com/projdocs/api/internal/router/middleware"
 	"github.com/projdocs/api/internal/router/routes/v1/organizations/id"
-	"github.com/projdocs/api/internal/storage"
+	"github.com/projdocs/api/internal/storage/providers"
 	"github.com/projdocs/api/internal/types/response"
 	"github.com/projdocs/projdocs/packages/go/database"
 )
@@ -82,7 +82,7 @@ func createOrganization(ctx *gin.Context) {
 		}
 	}
 
-	sp, err := storage.GetProviderFrom(s)
+	sp, err := providers.GetProvider(s)
 	if err != nil {
 		log.Printf("unable to get provider from storage: %v", err)
 		response.Error(ctx, http.StatusInternalServerError, "unable to create storage provider")

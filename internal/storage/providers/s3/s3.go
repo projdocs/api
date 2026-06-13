@@ -1,4 +1,4 @@
-package storage
+package s3
 
 import (
 	"bytes"
@@ -15,14 +15,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
+	"github.com/projdocs/api/internal/storage/types"
 	"github.com/tus/tusd/v2/pkg/handler"
 	"github.com/tus/tusd/v2/pkg/s3store"
 )
 
-// S3Config carries the per-request S3 credentials and target.
+// Config carries the per-request S3 credentials and target.
 // Your Majesty should populate this from whatever source is appropriate
 // (database, JWT claims, request headers, etc.)
-type S3Config struct {
+type Config struct {
 	Region          string
 	Bucket          string
 	AccessKeyID     string
@@ -30,16 +31,43 @@ type S3Config struct {
 	Endpoint        string // optional; leave empty for real AWS S3
 }
 
-type S3Provider struct {
+type Provider struct {
 	client *s3.Client
 	bucket string
 }
 
-func (p *S3Provider) ToTusHandler(
+func NewProvider(cfg Config) (*Provider, error) {
+	awsCfg, err := awsconfig.LoadDefaultConfig(
+		context.Background(),
+		awsconfig.WithRegion(cfg.Region),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				cfg.AccessKeyID,
+				cfg.SecretAccessKey,
+				"",
+			),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("aws config error: %w", err)
+	}
+
+	return &Provider{
+		bucket: cfg.Bucket,
+		client: s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+			if cfg.Endpoint != "" {
+				o.BaseEndpoint = &cfg.Endpoint
+				o.UsePathStyle = true
+			}
+		}),
+	}, nil
+}
+
+func (p *Provider) ToTusHandler(
 	storageProviderId uuid.UUID,
 	basePath string,
 	uploadPrefix string,
-	callback Callback,
+	callback types.Callback,
 ) (*handler.Handler, error) {
 
 	store := s3store.New(p.bucket, p.client)
@@ -82,6 +110,7 @@ func (p *S3Provider) ToTusHandler(
 
 			checksum := strings.Trim(aws.ToString(head.ETag), `"`)
 			response = callback(
+				fmt.Sprintf("%s/%s", strings.TrimSuffix(providerID, "/"), strings.Split(hook.Upload.ID, "+")[0]),
 				storageProviderId,
 				basePath,
 				uploadPrefix,
@@ -93,34 +122,7 @@ func (p *S3Provider) ToTusHandler(
 	})
 }
 
-func NewS3Provider(cfg S3Config) (*S3Provider, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(
-		context.Background(),
-		awsconfig.WithRegion(cfg.Region),
-		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(
-				cfg.AccessKeyID,
-				cfg.SecretAccessKey,
-				"",
-			),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("aws config error: %w", err)
-	}
-
-	return &S3Provider{
-		bucket: cfg.Bucket,
-		client: s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-			if cfg.Endpoint != "" {
-				o.BaseEndpoint = &cfg.Endpoint
-				o.UsePathStyle = true
-			}
-		}),
-	}, nil
-}
-
-func (p *S3Provider) CreateFolder(ctx context.Context, parent *string, name string, metadata map[string]string) (*string, error) {
+func (p *Provider) CreateFolder(ctx context.Context, parent *string, name string, metadata map[string]string) (*string, error) {
 
 	path := ""
 	if parent != nil {
@@ -165,7 +167,7 @@ func (p *S3Provider) CreateFolder(ctx context.Context, parent *string, name stri
 	return &key, nil
 }
 
-func (p *S3Provider) GetContent(
+func (p *Provider) GetContent(
 	ctx context.Context,
 	id string,
 	start int64,

@@ -14,7 +14,7 @@ import (
 	"github.com/projdocs/api/internal/handlers/tus"
 	"github.com/projdocs/api/internal/router/middleware"
 	"github.com/projdocs/api/internal/router/routes/v1/organizations/id/folders/files/versions"
-	"github.com/projdocs/api/internal/storage"
+	"github.com/projdocs/api/internal/storage/types"
 	"github.com/tus/tusd/v2/pkg/handler"
 )
 
@@ -29,7 +29,8 @@ func Register(r *gin.RouterGroup) {
 	versions.Register(fid.Group("/versions"))
 }
 
-var onUploadCallback storage.Callback = func(
+var onUploadCallback types.Callback = func(
+	id string,
 	storageProviderID uuid.UUID,
 	basePath string,
 	parent string,
@@ -139,7 +140,7 @@ var onUploadCallback storage.Callback = func(
 		uploadID.String(),
 		storageProviderID.String(),
 		versionID.String(),
-		fmt.Sprintf("%s/%s", strings.TrimSuffix(providerID, "/"), strings.Split(hook.Upload.ID, "+")[0]),
+		id,
 		checksum,
 	); err != nil {
 		log.Printf("failed to insert storage_upload: %v\n", err)
