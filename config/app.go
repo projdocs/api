@@ -15,11 +15,17 @@ type S3Config struct {
 	SecretKey string
 }
 
+type SafeConvert struct {
+	AccessToken string
+	URL         string
+}
+
 type Config struct {
 	DatabaseURL string
 	KongURL     string
 	JWTKeys     jwk.Set
 	S3          S3Config
+	SafeConvert SafeConvert
 }
 
 var (
@@ -77,6 +83,10 @@ func Init() (*Config, error) {
 				AccessKey: v.GetString("SUPABASE_S3_ACCESS_KEY"),
 				SecretKey: v.GetString("SUPABASE_S3_SECRET_KEY"),
 			},
+			SafeConvert: SafeConvert{
+				AccessToken: v.GetString("SAFE_CONVERT_ACCESS_TOKEN"),
+				URL:         v.GetString("SAFE_CONVERT_URL"),
+			},
 		}
 
 		if err := cfg.validate(); err != nil {
@@ -91,6 +101,14 @@ func Init() (*Config, error) {
 }
 
 func (c *Config) validate() error {
+
+	if c.SafeConvert.AccessToken == "" {
+		return fmt.Errorf("validation: %s_SAFE_CONVERT_ACCESS_TOKEN is required", EnvPrefix)
+	}
+
+	if c.SafeConvert.URL == "" {
+		return fmt.Errorf("validation: %s_SAFE_CONVERT_URL is required", EnvPrefix)
+	}
 
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("validation: %s_DATABASE_URL is required", EnvPrefix)

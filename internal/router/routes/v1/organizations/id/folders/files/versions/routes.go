@@ -14,4 +14,7 @@ func Register(r *gin.RouterGroup) {
 	// get an existing version
 	vid.HEAD("", head)
 	vid.GET("", get)
+
+	// handle version previews
+	vid.GET("/preview", getPreview)
 }
